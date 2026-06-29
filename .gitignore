@@ -1,0 +1,58 @@
+# --- Python Standard ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# /data
+**/data/
+
+# C extensions
+*.so
+
+# --- Virtual Environments ---
+# You specifically mentioned venv, but I included common variations
+venv/
+.venv/
+env/
+ENV/
+.env
+
+# --- Distribution / Packaging ---
+# If you package your project later
+build/
+dist/
+develop-eggs/
+eggs/
+lib/
+lib64/
+*.egg-info/
+*.egg
+
+# --- Jupyter Notebooks ---
+# NumPy & Matplotlib are often used in notebooks.
+# This ignores the auto-save checkpoints.
+.ipynb_checkpoints
+
+# --- IDE / Editor Settings ---
+# Good practice to ignore these personal settings
+.idea/
+.vscode/
+*.swp
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db
+
+# --- 3D Prints ---
+prints/
+
+# --- Project Specific (Optional) ---
+# Uncomment the lines below if you want to ignore
+# output plots or heavy data files.
+
+# *.png
+# *.jpg
+# *.csv
+# *.npy
+# *.npz
