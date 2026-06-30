@@ -15,9 +15,9 @@ class ModelPredictiveControl:
         self.Phi = model.Phi
         self.Gamma = model.Gamma
 
-        self._set_Q1()
+        self.Q1 = cfg.Q1
         self.Q2 = cfg.Q2
-        self._set_Qf()
+        self.Qf = self.cfg.Qf if self.cfg.Qf is not None else self.Q1
 
         self.Hp = cfg.Hp
         self.Hu = cfg.Hu
@@ -141,7 +141,7 @@ class ModelPredictiveControl:
         return result
     
     def step(self, x0, ref, u_prev, current_Phi=None, current_Gamma=None):
-        result = self.solve(x0, ref, u_prev)
+        result = self.solve(x0, ref, u_prev, current_Phi=current_Phi, current_Gamma=current_Gamma)
         
         if result["u0"] is None:
             raise RuntimeError(f"MPC solve failed with status: {result['status']}")
@@ -152,28 +152,5 @@ class ModelPredictiveControl:
         if self.x.value is None or self.u.value is None:
             raise RuntimeError("Problem has not been solved yet.")
         return self.x.value, self.u.value
-    
-    def _set_Q1(self):
-        if self.cfg.Q1.shape[0] < self.nbr_states:
-            nbr_d = self.nbr_states - self.cfg.Q1.shape[0]
-            self.Q1 = np.block([
-                [self.cfg.Q1, np.zeros((self.cfg.Q1.shape[0], nbr_d))],
-                [np.zeros((nbr_d, self.nbr_states))]
-            ])
-        else:
-            self.Q1 = self.cfg.Q1
-    
-    def _set_Qf(self):
-        if self.cfg.Qf is not None:
-            if self.cfg.Qf.shape[0] < self.nbr_states:
-                nbr_d = self.nbr_states - self.cfg.Qf.shape[0]
-                self.Qf = np.block([
-                    [self.cfg.Qf, np.zeros((self.cfg.Qf.shape[0], nbr_d))],
-                    [np.zeros((nbr_d, self.nbr_states))]
-                ])
-            else:
-                self.Qf = self.cfg.Qf
-        else:
-            self.Qf = self.Q1
             
     

@@ -7,7 +7,7 @@ class Rocket():
         self.propellant_mass = self.wet_mass - self.dry_mass
         
         #Motor
-        self.burn_time = 3.4
+        self.burn_time = 5
         self.average_thrust = 15.0
         
         #Geometry
@@ -36,7 +36,7 @@ class Rocket():
         else:
             self.mass = self.dry_mass
             
-        self.inertia = (1.0 / 12.0) * self.m * (self.length ** 2)
+        self.inertia = (1.0 / 12.0) * self.mass * (self.length ** 2)
         
         self.cg_distance = self.length / 2
     
@@ -47,10 +47,10 @@ class Rocket():
         theta_dot = x[1]
         delta = u[0]
         
-        m = self.mass(t) 
-        I = self.inertia(t)
-        T = self.thrust(t)
-        l_cg = self.cg_distance(t)
+        m = self.mass
+        I = self.inertia
+        T = self.thrust
+        l_cg = self.cg_distance
         
         theta_ddot = (-T * np.sin(delta) * l_cg) / I
         

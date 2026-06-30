@@ -35,7 +35,7 @@ def SIM_RocketTVC():
     
     Q1 = np.diag([1000.0, 10.0])
     
-    Q2 = np.diag([1.0])
+    Q2 = np.diag([10.0])
     
     #+/- 5 degrees in radians)
     max_gimbal_angle = 5.0 * (np.pi / 180.0)

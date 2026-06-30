@@ -75,11 +75,7 @@ class KalmanFilter:
         x_init = np.zeros((self.model.nbr_states, 1))
         
         for i in range(self.model.nbr_outputs):
-            pos_idx = i * 2      #  px, vx, py, vy, pz, vz, ...
-            vel_idx = i * 2 + 1  
-            print(y1)
-            x_init[pos_idx, 0] = y1[i]
-            x_init[vel_idx, 0] = 0.0
+            x_init[i, 0] = y1[i]
             
         self.x = x_init
 
