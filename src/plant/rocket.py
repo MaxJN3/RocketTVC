@@ -40,18 +40,15 @@ class Rocket():
         
         self.cg_distance = self.length / 2
     
-    def dynamics(self, t, x, u):
+    def dynamics(self, t, x, u, omega_c=20):
         # x = [theta, theta_dot]
         # u = [delta] (gimbal angle)
-        theta = x[0]
-        theta_dot = x[1]
-        delta = u[0]
+        theta, theta_dot, delta = x
+        delta_cmd = u[0]
         
-        m = self.mass
-        I = self.inertia
-        T = self.thrust
-        l_cg = self.cg_distance
+        alpha = (-self.thrust * self.cg_distance) / self.inertia
+        theta_ddot = alpha * delta
         
-        theta_ddot = (-T * np.sin(delta) * l_cg) / I
+        delta_dot = omega_c * (delta_cmd - delta)
         
-        return np.array([theta_dot, theta_ddot])
+        return np.array([theta_dot, theta_ddot, delta_dot])

@@ -4,6 +4,7 @@ from typing import Optional
 
 MODEL = {
     1: "SIM_RocketTVC",
+    2: "ActuatorDelay_RocketTVC"
 }
 
 @dataclass
@@ -44,6 +45,9 @@ def load_model(model_name: str, **kwargs):
     if model_name == "SIM_RocketTVC":
         return SIM_RocketTVC(dt=kwargs.get("dt"))
     
+    if model_name == "ActuatorDelay_RocketTVC":
+        return ActuatorDelay_RocketTVC(dt=kwargs.get("dt"))
+    
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -52,8 +56,6 @@ def SIM_RocketTVC(dt):
     K_GAIN = 1.0 # No external scaling needed for now
     
     # States: [theta (angle), theta_dot (angular velocity)]
-    unmeasured_states = [] # Assuming IMU gives us both for now
-    
     Phi = np.array([
         [1.0, dt ],
         [0.0, 1.0]
@@ -89,7 +91,56 @@ def SIM_RocketTVC(dt):
     model = ModelConfig(
         Phi=Phi, Gamma=Gamma, G=G, Cy=Cy, Cz=Cz, 
         R1=R1, R2=R2, K_GAIN=K_GAIN, unit=unit, 
-        unmeasured_states=unmeasured_states
+    )
+    return model
+
+def ActuatorDelay_RocketTVC(dt):
+    unit = "rad"
+    K_GAIN = 1.0 # No external scaling needed for now
+    omega_c = 20
+    
+    c1 = np.exp(-dt * omega_c)
+    c2 = 1.0 - c1
+    
+    # States: [theta, theta_dot, delta]     delta_dot = omega_c * (delta_cmd - delta)
+    Phi = np.array([
+        [1.0, dt , 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, c1 ]
+    ]) 
+    
+    # Placeholder Gamma (will be overwritten by the controller dynamically)
+    Gamma = np.array([
+        [0.0],
+        [0.0],
+        [c2 ]
+    ])
+    
+    G = np.array([
+        [0.5 * dt**2],
+        [dt         ],
+        [0.0        ]
+    ])
+    
+    Cy = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0]
+    ])
+    
+    Cz = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0]
+    ])
+    
+    var_model = 1e-2
+    R1 = var_model * np.eye(1)
+    
+    var_measurement = 1e-4
+    R2 = var_measurement * np.eye(2)
+    
+    model = ModelConfig(
+        Phi=Phi, Gamma=Gamma, G=G, Cy=Cy, Cz=Cz, 
+        R1=R1, R2=R2, K_GAIN=K_GAIN, unit=unit,
     )
     return model
 

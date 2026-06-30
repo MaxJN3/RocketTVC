@@ -55,6 +55,8 @@ class Controller:
 
             u_applied = self._compensate_deadband(u_opt)
             
+            if current_Phi is not None:
+                self.kf.Phi = current_Phi
             if current_Gamma is not None:
                 self.kf.Gamma = current_Gamma
             self.kf.predict_step(u_applied)
