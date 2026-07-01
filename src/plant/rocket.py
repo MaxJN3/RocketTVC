@@ -12,12 +12,15 @@ class Rocket():
         
         #Geometry
         self.length = 1.0
+        self.radius = 0.04
+        
+        self.cg = self.length / 2.0
+        self.cp = 0.4
         
         #Init
         self.thrust = self.average_thrust
         self.mass = self.wet_mass
         self.inertia = (1.0 / 12.0) * self.mass * (self.length ** 2)
-        self.cg_distance = self.length / 2.0
         
     def update_state(self, t):
         '''
@@ -38,16 +41,17 @@ class Rocket():
             
         self.inertia = (1.0 / 12.0) * self.mass * (self.length ** 2)
         
-        self.cg_distance = self.length / 2
+        self.cg = self.length / 2
     
-    def dynamics(self, t, x, u, omega_c=20):
+    def dynamics(self, t, x, u, M_aero, omega_c=20):
         # x = [theta, theta_dot]
         # u = [delta] (gimbal angle)
         theta, theta_dot, delta = x
         delta_cmd = u[0]
         
-        alpha = (-self.thrust * self.cg_distance) / self.inertia
-        theta_ddot = alpha * delta
+        alpha = (-self.thrust * self.cg) / self.inertia
+        
+        theta_ddot = alpha * delta + M_aero / self.inertia
         
         delta_dot = omega_c * (delta_cmd - delta)
         

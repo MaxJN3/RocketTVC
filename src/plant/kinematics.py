@@ -15,7 +15,7 @@ class Kinematics:
         
         self.state = np.zeros(6 if is_3d else 4)
 
-    def dynamics(self, state, thrust, mass, pitch_angle, yaw_angle=0.0):
+    def dynamics(self, state, thrust, mass, pitch_angle, yaw_angle=0.0, fx_aero=0.0, fy_aero=0.0, fz_aero=0.0):
         """
         Derivative calculation function required by the RK4 solver.
         """
@@ -45,9 +45,9 @@ class Kinematics:
             F_inertial = R_global @ F_body
             
             # (a = F/m)
-            ax = F_inertial[0] / mass
-            ay = F_inertial[1] / mass
-            az = (F_inertial[2] / mass) - 9.81
+            ax = (F_inertial[0] + fx_aero) / mass
+            ay = (F_inertial[1] + fy_aero) / mass
+            az = ((F_inertial[2] + fz_aero) / mass) - 9.81
             
             return np.array([vx, vy, vz, ax, ay, az])
             
@@ -55,14 +55,14 @@ class Kinematics:
             # 2D Case (X = Downrange, Y = Altitude)
             vx, vy = state[2], state[3]
             
-            ax = (thrust / mass) * np.sin(pitch_angle)
-            ay = (thrust / mass) * np.cos(pitch_angle) - 9.81
+            ax = (thrust / mass) * np.sin(pitch_angle) + (fx_aero / mass)
+            ay = (thrust / mass) * np.cos(pitch_angle) - 9.81 + (fy_aero / mass)
             
             return np.array([vx, vy, ax, ay])
 
-    def step(self, dt, thrust, mass, pitch_angle, yaw_angle=0.0):
+    def step(self, dt, thrust, mass, pitch_angle, yaw_angle=0.0, fx_aero=0.0, fy_aero=0.0, fz_aero=0.0):
         """Advances the spatial physics forward by dt using numerical RK4 integration."""
-        f_kin = lambda t_sub, s, u_dummy: self.dynamics(s, thrust, mass, pitch_angle, yaw_angle)
+        f_kin = lambda t_sub, s, u_dummy: self.dynamics(s, thrust, mass, pitch_angle, yaw_angle, fx_aero, fy_aero, fz_aero)
         self.state = rk4_step(f_kin, 0.0, self.state, None, dt)
         
         if self.is_3d:

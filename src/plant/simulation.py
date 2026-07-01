@@ -16,6 +16,7 @@ from src.controlling.modelling.objectives import MinimizeError
 from rocket import Rocket
 from logger import FlightLogger
 from kinematics import Kinematics
+from aerodyanmics import Aerodynamics
 from diffeqsolvers import rk4_step
 
 
@@ -36,6 +37,7 @@ controller = Controller(extended_model, cfg_rocket, MinimizeError(nbr_states=2),
 
 logger = FlightLogger()
 kinematics = Kinematics(is_3d=False)
+aerodynamics = Aerodynamics(rocket.radius, rocket.cp, cd=0.5, cna=2.0)
 
 for t in tt:
     rocket.update_state(t)
@@ -43,11 +45,16 @@ for t in tt:
     m = rocket.mass
     I = rocket.inertia
     T = rocket.thrust
-    l_cg = rocket.cg_distance
+    l_cg = rocket.cg
     
     pitch = x_current[0]
     
-    kinematics.step(dt, thrust=T, mass=m, pitch_angle=pitch)
+    wind_x = -10.0 if t >= 2.0 else 0.0
+    wind_y = 0.0
+    
+    aero = aerodynamics.calculate_forces_and_torque(kinematics.vx, kinematics.vy, pitch, l_cg, wind_x, wind_y)
+    
+    kinematics.step(dt, thrust=T, mass=m, pitch_angle=pitch, fx_aero=aero["F_aero_x"], fy_aero=aero["F_aero_y"])
     
     logger.log_step(t, x_current, u_opt, pos=kinematics.pos, vel=kinematics.vel)
     
@@ -85,13 +92,8 @@ for t in tt:
     
     u_opt, x_hat = controller.step(y_measured=y_measured, current_Phi=Phi_extended, current_Gamma=Gamma)
     
-    x_current = rk4_step(rocket.dynamics, t, x_current, u_opt, dt)
-    
-    true_wind_accel = 0.0
-    if t >= 2.0:
-        true_wind_accel = -2.0
-        
-    x_current = x_current + (model_rocket.G @ np.array([true_wind_accel])).flatten()
+    f_rocket = lambda t_sub, x_sub, u_sub: rocket.dynamics(t_sub, x_sub, u_sub, M_aero=aero["M_aero"])
+    x_current = rk4_step(f_rocket, t, x_current, u_opt, dt)
     
 logger.plot_dashboard()
 
