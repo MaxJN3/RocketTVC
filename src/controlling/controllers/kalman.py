@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import solve_discrete_are, LinAlgError
-from src.controlling.modelling.models import ModelConfig
+from src.controlling.modelling.modelconfig import ModelConfig
 
 class KalmanFilter:
     def __init__(self, model: ModelConfig):

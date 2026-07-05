@@ -4,10 +4,6 @@ from typing import Optional
 
 from src.plant.parameters import ActuatorParams
 
-CONFIG = {
-    1: "SIM_RocketTVC",
-}
-
 @dataclass
 class MPCConfig:
     Hp: int #prediction horizon
@@ -22,14 +18,6 @@ class MPCConfig:
     use_terminal_cost: bool = False
     Qf: Optional[np.ndarray] = None
     slack_penalty: Optional[float] = 10000
-
-def load_config(config_name: str, **kwargs):
-
-    if config_name == "SIM_RocketTVC":
-        return SIM_RocketTVC(actuator=kwargs["actuator"])
-
-    else:
-        raise ValueError(f"Unknown config: {config_name}")
 
 def SIM_RocketTVC(actuator: ActuatorParams):
     Hp = 20

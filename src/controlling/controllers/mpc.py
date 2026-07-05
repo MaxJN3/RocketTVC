@@ -1,6 +1,6 @@
 import numpy as np
 import cvxpy as cp
-from src.controlling.modelling.models import ModelConfig
+from src.controlling.modelling.modelconfig import ModelConfig
 from src.controlling.modelling.configs import MPCConfig
 
 class ModelPredictiveControl:

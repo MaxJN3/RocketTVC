@@ -34,9 +34,8 @@ class Imu:
         self.accel_bias_long = np.random.uniform(-b_a, b_a)
         self.accel_bias_lat = np.random.uniform(-b_a, b_a)
 
-        # TODO(Max): draw the gyro turn-on bias here — same pattern as the
-        # accelerometer above, range from params.gyro.turn_on_bias_max.
-        self.gyro_bias = 0.0
+        b_g = params.gyro.turn_on_bias_max
+        self.gyro_bias = np.random.uniform(-b_g, b_g)
 
     def measure(self, theta, theta_dot, ax, ay):
         """
@@ -58,18 +57,13 @@ class Imu:
 
     def _measure_gyro(self, theta_dot):
         """
-        TODO(Max): implement the gyro measurement model:
-
-            omega_meas = theta_dot + bias + noise
-
-        where
-          - bias is the turn-on bias drawn in __init__
-          - noise ~ N(0, sigma^2), sigma from noise_std(...) with the gyro's
-            noise_density and sample_rate
-
-        Mirror _measure_accel below for the pattern.
+        Gyro measures body pitch rate: omega_meas = theta_dot + bias + noise.
+        The turn-on bias is constant per flight (drawn in __init__); the noise
+        is white with per-sample sigma from the datasheet noise density.
         """
-        raise NotImplementedError("gyro model not implemented yet")
+        sigma = noise_std(self.params.gyro.noise_density, self.params.gyro.sample_rate)
+        noise = np.random.normal(0.0, sigma)
+        return theta_dot + self.gyro_bias + noise
 
     def _measure_accel(self, theta, ax, ay):
         """

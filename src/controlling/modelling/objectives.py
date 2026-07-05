@@ -1,17 +1,5 @@
 import numpy as np
 
-OBJECTIVES = {
-    1: "MinimizeError",
-}
-
-def load_objective(objective_name: str, **kwargs):
-        
-    if objective_name == "MinimizeError":
-        return MinimizeError(nbr_states=kwargs.get("nbr_states", 2))
-    
-    else:
-        raise ValueError(f"Unknown objective: {objective_name}")
-
 class Objective:
     def compute_reference(self, x_hat):
             raise NotImplementedError("Each detector must implement compute_reference!")

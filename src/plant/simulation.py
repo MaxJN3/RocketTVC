@@ -9,27 +9,36 @@ if str(project_root) not in sys.path:
 import numpy as np
 
 from src.plant.parameters import VehicleParams
-from src.controlling.controllers.controller import Controller
-from src.controlling.modelling.configs import SIM_RocketTVC as cfg_SIM_RocketTVC
-from src.controlling.modelling.models import (
-    ActuatorDelay_RocketTVC,
-    add_disturbance_state,
-    linearize_actuator_delay,
-    extend_matrices_with_disturbance,
-)
-from src.controlling.modelling.objectives import MinimizeError
 from src.plant.vehicle.rocket import Rocket
 from src.plant.vehicle.kinematics import Kinematics
 from src.plant.vehicle.aerodynamics import Aerodynamics
+from src.plant.sensors.imu import Imu, GRAVITY
 from src.plant.logger import FlightLogger
 from src.plant.diffeqsolvers import rk4_step
+
+from src.controlling.controllers.mpc import ModelPredictiveControl
+from src.controlling.estimators.attitude_estimator import AttitudeEstimator
+from src.controlling.modelling.configs import SIM_RocketTVC as cfg_SIM_RocketTVC
+from src.controlling.modelling.rocket_tvc import (
+    ActuatorDelay_RocketTVC,
+    linearize_actuator_delay,
+    IMU_KF_RocketTVC,
+    linearize_imu_kf,
+)
+from src.controlling.modelling.transforms import (
+    add_disturbance_state,
+    extend_matrices_with_disturbance,
+)
+from src.controlling.modelling.objectives import MinimizeError
 
 
 # ===== Scenario =====
 dt = 1 / 50
 t_end = 5.0
+pad_seconds = 2.0                    # clamped on the pad, calibrating the gyro bias
 
-x0 = np.array([0.1, 0.0, 0.0])  # [theta, theta_dot, delta]: launch tipped 0.1 rad
+x0 = np.array([0.1, 0.0, 0.0])       # true [theta, theta_dot, delta]: launch tipped 0.1 rad
+launch_angle = x0[0]                 # known from the launch rail
 
 def wind(t):
     """Wind velocity (x, y) in m/s: a 10 m/s crosswind gust hitting at t = 2s."""
@@ -42,19 +51,30 @@ params = VehicleParams()
 rocket = Rocket(params)
 kinematics = Kinematics(is_3d=False)
 aerodynamics = Aerodynamics(params.airframe, params.aero)
+imu = Imu(params.imu)
 
-# ===== Controller =====
-model_rocket = ActuatorDelay_RocketTVC(dt, params.actuator)
-extended_model = add_disturbance_state(model_rocket)
-cfg_rocket = cfg_SIM_RocketTVC(params.actuator)
+# ===== Controller: MPC on the full state, KF on the observable subsystem =====
+mpc_base = ActuatorDelay_RocketTVC(dt, params.actuator)   # [theta, theta_dot, delta]
+mpc_model = add_disturbance_state(mpc_base)               # + wind -> full 4-state
+mpc = ModelPredictiveControl(mpc_model, cfg_SIM_RocketTVC(params.actuator))
+objective = MinimizeError(nbr_states=2)
 
-controller = Controller(extended_model, cfg_rocket, MinimizeError(nbr_states=2), dt)
+kf_model = IMU_KF_RocketTVC(dt, params.actuator, params.imu.gyro)   # [theta_dot, delta, wind]
+estimator = AttitudeEstimator(kf_model, dt, launch_angle=launch_angle)
 
 logger = FlightLogger(u_limit_deg=np.degrees(params.actuator.max_gimbal_rad))
 
 
-x_current = x0
+# ===== Pad phase: rocket clamped, motor off, true rate = 0 =====
+gyro_pad = [imu.measure(theta=launch_angle, theta_dot=0.0, ax=0.0, ay=0.0)["gyro"]
+            for _ in range(int(pad_seconds / dt))]
+estimator.calibrate_bias(gyro_pad)
+
+
+# ===== Flight =====
+x_current = x0.copy()
 u_opt = np.array([0.0])
+theta_true_hist, theta_est_hist = [], []
 
 for t in np.arange(0, t_end, dt):
     rocket.update_state(t)
@@ -64,29 +84,44 @@ for t in np.arange(0, t_end, dt):
     aero = aerodynamics.calculate_forces_and_torque(
         kinematics.vx, kinematics.vy, pitch, rocket.cg, wind_x, wind_y
     )
-
     kinematics.step(dt, thrust=rocket.thrust, mass=rocket.mass, pitch_angle=pitch,
                     fx_aero=aero["F_aero_x"], fy_aero=aero["F_aero_y"])
-
     logger.log_step(t, x_current, u_opt, pos=kinematics.pos, vel=kinematics.vel)
 
-    # Controller's internal model, re-linearized about the current thrust and mass
-    Phi, Gamma = linearize_actuator_delay(dt, params.actuator,
+    # True vehicle acceleration, fed to the IMU (Option 1 reads only the gyro,
+    # but the accelerometer channel is driven honestly for future use / logging).
+    ax_true = (rocket.thrust / rocket.mass) * np.sin(pitch) + aero["F_aero_x"] / rocket.mass
+    ay_true = (rocket.thrust / rocket.mass) * np.cos(pitch) - GRAVITY + aero["F_aero_y"] / rocket.mass
+    meas = imu.measure(theta=x_current[0], theta_dot=x_current[1], ax=ax_true, ay=ay_true)
+
+    # Re-linearize both models about the current thrust/mass operating point
+    Phi_full, Gamma_full = extend_matrices_with_disturbance(
+        *linearize_actuator_delay(dt, params.actuator,
+                                  rocket.thrust, rocket.gimbal_arm, rocket.inertia),
+        mpc_base.G)
+    Phi_red, Gamma_red = linearize_imu_kf(dt, params.actuator,
                                           rocket.thrust, rocket.gimbal_arm, rocket.inertia)
-    Phi_extended, Gamma_extended = extend_matrices_with_disturbance(Phi, Gamma, model_rocket.G)
 
-    # Measurement: perfect state + Gaussian noise. This is the seam where the
-    # IMU simulator will plug in — real sensors do not measure theta directly.
-    y_true = model_rocket.Cy @ x_current.reshape(-1, 1)
-    measurement_noise = np.random.multivariate_normal(
-        mean=np.zeros(model_rocket.Cy.shape[0]),
-        cov=model_rocket.R2
-    ).reshape(-1, 1)
-    y_measured = y_true + measurement_noise
+    # Estimate -> control -> propagate estimator with the fresh command
+    x_hat = estimator.update(meas["gyro"])
+    ref = objective.compute_reference(x_hat)
+    u_opt = mpc.step(x_hat, ref, u_opt, current_Phi=Phi_full, current_Gamma=Gamma_full)
+    estimator.predict(u_opt, Phi_red, Gamma_red)
 
-    u_opt, x_hat = controller.step(y_measured=y_measured,
-                                   current_Phi=Phi_extended, current_Gamma=Gamma_extended)
+    theta_true_hist.append(x_current[0])
+    theta_est_hist.append(float(x_hat[0, 0]))
 
     x_current = rk4_step(rocket.dynamics, t, x_current, dt, u_opt, M_aero=aero["M_aero"])
+
+
+# ===== Verification =====
+theta_true = np.array(theta_true_hist)
+theta_est = np.array(theta_est_hist)
+print(f"gyro bias:   true {np.degrees(imu.gyro_bias):+.4f} deg/s   "
+      f"calibrated {np.degrees(estimator.gyro_bias):+.4f} deg/s   "
+      f"residual {np.degrees(imu.gyro_bias - estimator.gyro_bias):+.4f} deg/s")
+print(f"theta est:   max |est - true| = {np.degrees(np.abs(theta_est - theta_true).max()):.4f} deg")
+print(f"stability:   final theta = {np.degrees(theta_true[-1]):+.4f} deg   "
+      f"max |theta| = {np.degrees(np.abs(theta_true).max()):.4f} deg")
 
 logger.plot_dashboard()
