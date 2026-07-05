@@ -2,6 +2,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
+from src.plant.parameters import ActuatorParams
+
 MODEL = {
     1: "SIM_RocketTVC",
     2: "ActuatorDelay_RocketTVC"
@@ -46,7 +48,7 @@ def load_model(model_name: str, **kwargs):
         return SIM_RocketTVC(dt=kwargs.get("dt"))
     
     if model_name == "ActuatorDelay_RocketTVC":
-        return ActuatorDelay_RocketTVC(dt=kwargs.get("dt"))
+        return ActuatorDelay_RocketTVC(dt=kwargs.get("dt"), actuator=kwargs["actuator"])
     
     else:
         raise ValueError(f"Unknown model: {model_name}")
@@ -94,11 +96,11 @@ def SIM_RocketTVC(dt):
     )
     return model
 
-def ActuatorDelay_RocketTVC(dt):
+def ActuatorDelay_RocketTVC(dt, actuator: ActuatorParams):
     unit = "rad"
     K_GAIN = 1.0 # No external scaling needed for now
-    omega_c = 20
-    
+    omega_c = actuator.omega_c
+
     c1 = np.exp(-dt * omega_c)
     c2 = 1.0 - c1
     
@@ -139,10 +141,56 @@ def ActuatorDelay_RocketTVC(dt):
     R2 = var_measurement * np.eye(2)
     
     model = ModelConfig(
-        Phi=Phi, Gamma=Gamma, G=G, Cy=Cy, Cz=Cz, 
+        Phi=Phi, Gamma=Gamma, G=G, Cy=Cy, Cz=Cz,
         R1=R1, R2=R2, K_GAIN=K_GAIN, unit=unit,
     )
     return model
+
+def linearize_actuator_delay(dt, actuator: ActuatorParams, thrust, gimbal_arm, inertia):
+    """
+    Time-varying Phi, Gamma for the ActuatorDelay_RocketTVC structure,
+    linearized about the current operating point (thrust and mass properties
+    change during the burn, so this must be recomputed every control step).
+    """
+    alpha = (-thrust * gimbal_arm) / inertia
+
+    c1 = np.exp(-dt * actuator.omega_c)
+    c2 = 1.0 - c1
+
+    Phi = np.array([
+        [1.0, dt , 0.5 * alpha * dt**2],
+        [0.0, 1.0, alpha * dt         ],
+        [0.0, 0.0, c1                 ]
+    ])
+
+    Gamma = np.array([
+        [0.0],
+        [0.0],
+        [c2 ]
+    ])
+
+    return Phi, Gamma
+
+def extend_matrices_with_disturbance(Phi, Gamma, Gammad):
+    """
+    Runtime companion to add_disturbance_state: applies the same block
+    structure to time-varying Phi, Gamma. The disturbance is modeled as
+    constant over each step (random-walk state).
+    """
+    nbr_x = Phi.shape[0]
+    nbr_d = Gammad.shape[1]
+
+    Phi_extended = np.block([
+        [Phi, Gammad],
+        [np.zeros((nbr_d, nbr_x)), np.eye(nbr_d)]
+    ])
+
+    Gamma_extended = np.vstack([
+        Gamma,
+        np.zeros((nbr_d, Gamma.shape[1]))
+    ])
+
+    return Phi_extended, Gamma_extended
 
 def add_disturbance_state(base_model: ModelConfig, Gammad=None, Cd=None, Cdz=None, var_dist=1e-1):
     """

@@ -2,6 +2,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
+from src.plant.parameters import ActuatorParams
+
 CONFIG = {
     1: "SIM_RocketTVC",
 }
@@ -21,28 +23,27 @@ class MPCConfig:
     Qf: Optional[np.ndarray] = None
     slack_penalty: Optional[float] = 10000
 
-def load_config(config_name: str):
-    
+def load_config(config_name: str, **kwargs):
+
     if config_name == "SIM_RocketTVC":
-        return SIM_RocketTVC()
-    
+        return SIM_RocketTVC(actuator=kwargs["actuator"])
+
     else:
         raise ValueError(f"Unknown config: {config_name}")
-    
-def SIM_RocketTVC():
+
+def SIM_RocketTVC(actuator: ActuatorParams):
     Hp = 20
     Hu = 20
-    
+
     Q1 = np.diag([1000.0, 10.0])
-    
+
     Q2 = np.diag([10.0])
-    
-    #+/- 5 degrees in radians)
-    max_gimbal_angle = 5.0 * (np.pi / 180.0)
-    u_min = np.array([-max_gimbal_angle])
-    u_max = np.array([max_gimbal_angle])
-    
-    u_max_step = np.array([0.05]) 
+
+    # Input bounds are the gimbal's physical limits
+    u_min = np.array([-actuator.max_gimbal_rad])
+    u_max = np.array([actuator.max_gimbal_rad])
+
+    u_max_step = np.array([actuator.max_gimbal_step])
     
     use_terminal_cost = True
     

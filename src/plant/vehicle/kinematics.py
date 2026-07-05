@@ -1,5 +1,5 @@
 import numpy as np
-from diffeqsolvers import rk4_step
+from src.plant.diffeqsolvers import rk4_step
 
 class Kinematics:
     def __init__(self, is_3d=False):
@@ -15,7 +15,7 @@ class Kinematics:
         
         self.state = np.zeros(6 if is_3d else 4)
 
-    def dynamics(self, state, thrust, mass, pitch_angle, yaw_angle=0.0, fx_aero=0.0, fy_aero=0.0, fz_aero=0.0):
+    def dynamics(self, t, state, thrust, mass, pitch_angle, yaw_angle=0.0, fx_aero=0.0, fy_aero=0.0, fz_aero=0.0):
         """
         Derivative calculation function required by the RK4 solver.
         """
@@ -62,8 +62,9 @@ class Kinematics:
 
     def step(self, dt, thrust, mass, pitch_angle, yaw_angle=0.0, fx_aero=0.0, fy_aero=0.0, fz_aero=0.0):
         """Advances the spatial physics forward by dt using numerical RK4 integration."""
-        f_kin = lambda t_sub, s, u_dummy: self.dynamics(s, thrust, mass, pitch_angle, yaw_angle, fx_aero, fy_aero, fz_aero)
-        self.state = rk4_step(f_kin, 0.0, self.state, None, dt)
+        self.state = rk4_step(self.dynamics, 0.0, self.state, dt,
+                              thrust=thrust, mass=mass, pitch_angle=pitch_angle, yaw_angle=yaw_angle,
+                              fx_aero=fx_aero, fy_aero=fy_aero, fz_aero=fz_aero)
         
         if self.is_3d:
             self.x, self.y, self.z, self.vx, self.vy, self.vz = self.state

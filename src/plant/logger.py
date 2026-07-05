@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class FlightLogger:
-    def __init__(self, state_labels=None, input_labels=None):
+    def __init__(self, state_labels=None, input_labels=None, u_limit_deg=5.0):
+        self.u_limit_deg = u_limit_deg
         self.history = {
             "time": [],
             "x": [],
@@ -83,8 +84,8 @@ class FlightLogger:
                 ax.axhline(0, color='black', linestyle='--', lw=1, alpha=0.7)
                 
                 if row == 1 or row == 2:
-                    ax.axhline(5, color='gray', linestyle=':', label='Limit' if col==0 else "")
-                    ax.axhline(-5, color='gray', linestyle=':')
+                    ax.axhline(self.u_limit_deg, color='gray', linestyle=':', label='Limit' if col==0 else "")
+                    ax.axhline(-self.u_limit_deg, color='gray', linestyle=':')
                     
                 if ax.get_legend_handles_labels()[0]:
                     ax.legend(loc='upper right')

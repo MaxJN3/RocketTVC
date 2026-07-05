@@ -1,23 +1,18 @@
 import numpy as np
 
+from src.plant.parameters import AirframeParams, AeroParams
+
 class Aerodynamics:
-    def __init__(self, rocket_radius, cp_distance, cd=0.5, cna=2.0):
-        """
-        Args:
-            rocket_radius (float): Radius of the rocket body in meters.
-            cp_distance (float): Distance from the NOSE to the Center of Pressure (CP) in meters.
-            cd (float): Drag coefficient (default 0.5 for a generic tube).
-            cna (float): Normal force coefficient derivative (default 2.0 for a finless tube).
-        """
-        self.radius = rocket_radius
+    def __init__(self, airframe: AirframeParams, aero: AeroParams):
+        self.radius = airframe.radius
         self.ref_area = np.pi * (self.radius ** 2)
-        
-        self.cp_distance = cp_distance
-        
-        self.cd = cd
-        self.cna = cna
-        
-        self.air_density = 1.225  # kg/m^3 at sea level
+
+        self.cp_distance = airframe.cp_from_nose
+
+        self.cd = aero.cd
+        self.cna = aero.cna
+
+        self.air_density = aero.air_density
 
     def calculate_forces_and_torque(self, vx, vy, pitch, cg_distance, wind_x=0.0, wind_y=0.0):
         """
