@@ -1,150 +1,97 @@
+"""
+Generic flight logger: stores named scalar channels, renders a declarative
+panel layout. The logger knows nothing about rockets — the simulation (or
+future hardware telemetry reader) declares what to log and how to plot it.
+"""
+from collections import defaultdict
+from dataclasses import dataclass, field
+
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+# Units that mean "data is stored in radians, display in degrees"
+_RAD_TO_DEG_UNITS = {"deg", "deg/s", "deg/s^2"}
+
+
+@dataclass
+class Panel:
+    """
+    One subplot in the dashboard.
+
+    kind="time": each channel is drawn against its own logged time base.
+    kind="xy":   exactly two channels [x, y] (e.g. downrange vs altitude),
+                 drawn against each other with equal aspect.
+
+    unit is the y-axis label; the units in _RAD_TO_DEG_UNITS additionally
+    convert the stored radian data to degrees for display. hlines are drawn
+    in display units.
+    """
+    title: str
+    channels: list
+    unit: str = ""
+    kind: str = "time"
+    hlines: tuple = ()
+    labels: dict = field(default_factory=dict)  # channel -> legend label override
+
+
 class FlightLogger:
-    def __init__(self, state_labels=None, input_labels=None, u_limit_deg=5.0):
-        self.u_limit_deg = u_limit_deg
-        self.history = {
-            "time": [],
-            "x": [],
-            "u": [],
-            "pos": [],
-            "vel": []
-        }
-        
-        self.state_labels = state_labels or [
-            "Pitch", "Pitch Rate", "Servo Pitch"
-        ]
-        self.input_labels = input_labels or [
-            "Pitch Command"
-        ]
-        
-        # Dynamically determine the number of columns
-        self.has_yaw = any("yaw" in lbl.lower() for lbl in self.state_labels)
+    def __init__(self):
+        self._times = defaultdict(list)
+        self._values = defaultdict(list)
 
-    def log_step(self, t, x, u, pos=None, vel=None):
-        self.history["time"].append(t)
-        self.history["x"].append(np.copy(x).flatten())
-        
-        if u is not None:
-            self.history["u"].append(np.copy(u).flatten())
-        else:
-            self.history["u"].append(np.zeros(len(self.input_labels)))
-            
-        # Log position and velocity if provided
-        if pos is not None and vel is not None:
-            self.history["pos"].append(np.copy(pos))
-            self.history["vel"].append(np.copy(vel))
+    def log(self, t, **channels):
+        """Log any number of named scalar signals at time t.
 
-    def plot_dashboard(self):
-        """Generates the main control dashboard."""
-        time = np.array(self.history["time"])
-        X = np.array(self.history["x"])
-        U = np.array(self.history["u"])
-        
-        cols = 2 if self.has_yaw else 1
-        fig, axs = plt.subplots(3, cols, figsize=(7 * cols, 10), sharex=True)
-        fig.suptitle('Rocket TVC Simulation Results', fontsize=16, fontweight='bold')
-        
-        # Normalize axs to always be 2D so our matrix indexing [row, col] never breaks!
-        axs = np.array(axs).reshape(3, cols)
+        Each channel keeps its own time base, so channels logged at different
+        rates (pad phase, fast IMU, slow control loop) coexist naturally.
+        """
+        for name, value in channels.items():
+            self._times[name].append(t)
+            self._values[name].append(float(value))
 
-        # --- Route the Data ---
-        for i, label in enumerate(self.state_labels):
-            if i >= X.shape[1]: break
-            lbl_low = label.lower()
-            
-            col = 1 if "yaw" in lbl_low and self.has_yaw else 0
-            if "rate" in lbl_low or "dot" in lbl_low: continue
-                
-            if "servo" in lbl_low or "gimbal" in lbl_low or "\u03b4" in lbl_low:
-                axs[2, col].plot(time, np.degrees(X[:, i]), label=f"{label} (Actual)", color='#9467bd', lw=2)
-            else:
-                axs[0, col].plot(time, np.degrees(X[:, i]), label=label, color='#1f77b4', lw=2)
+    def series(self, name):
+        """(times, values) arrays for one channel."""
+        return np.array(self._times[name]), np.array(self._values[name])
 
-        for j, label in enumerate(self.input_labels):
-            if j >= U.shape[1]: break
-            lbl_low = label.lower()
-            col = 1 if "yaw" in lbl_low and self.has_yaw else 0
-            axs[1, col].plot(time, np.degrees(U[:, j]), label=f"{label} (Cmd)", color='#d62728', lw=2)
+    def array(self, name):
+        """Values array for one channel."""
+        return np.array(self._values[name])
 
-        # --- Shared Formatting ---
-        titles = [
-            ["Pitch Kinematics", "Yaw Kinematics"],
-            ["Pitch Command (\u03b4_cmd)", "Yaw Command (\u03b4_cmd)"],
-            ["Pitch Servo (\u03b4)", "Yaw Servo (\u03b4)"]
-        ]
-        
-        for row in range(3):
-            for col in range(cols):
-                ax = axs[row, col]
-                ax.set_title(titles[row][col], loc='left')
-                ax.set_ylabel('Degrees')
-                ax.grid(True, linestyle=':', alpha=0.6)
-                ax.axhline(0, color='black', linestyle='--', lw=1, alpha=0.7)
-                
-                if row == 1 or row == 2:
-                    ax.axhline(self.u_limit_deg, color='gray', linestyle=':', label='Limit' if col==0 else "")
-                    ax.axhline(-self.u_limit_deg, color='gray', linestyle=':')
-                    
-                if ax.get_legend_handles_labels()[0]:
-                    ax.legend(loc='upper right')
-                if row == 2:
-                    ax.set_xlabel('Time (Seconds)')
+    def plot(self, panels, cols=2, title="Flight dashboard"):
+        rows = -(-len(panels) // cols)  # ceil
+        fig, axs = plt.subplots(rows, cols, figsize=(6.5 * cols, 2.9 * rows))
+        axs = np.atleast_1d(axs).ravel()
+        fig.suptitle(title, fontsize=16, fontweight='bold')
+
+        for ax, panel in zip(axs, panels):
+            self._draw_panel(ax, panel)
+        for ax in axs[len(panels):]:
+            ax.set_visible(False)
 
         plt.tight_layout()
         plt.show()
 
-        # If trajectory data was logged, plot the second figure!
-        if len(self.history["pos"]) > 0:
-            self.plot_trajectory()
+    def _draw_panel(self, ax, panel):
+        to_display = np.degrees if panel.unit in _RAD_TO_DEG_UNITS else lambda v: v
 
-    def plot_trajectory(self):
-        """Generates a separate plot for flight path and velocity (handles 2D and 3D)."""
-        time = np.array(self.history["time"])
-        pos = np.array(self.history["pos"])
-        vel = np.array(self.history["vel"])
-        
-        # Check if we are logging 2D or 3D kinematics
-        is_3d = pos.shape[1] >= 3
-        
-        fig = plt.figure(figsize=(14, 6))
-        fig.suptitle('Rocket Flight Trajectory', fontsize=16, fontweight='bold')
-        
-        # --- Plot 1: Flight Path (2D or 3D) ---
-        if is_3d:
-            ax1 = fig.add_subplot(121, projection='3d')
-            ax1.plot(pos[:, 0], pos[:, 1], pos[:, 2], color='#2ca02c', lw=2)
-            ax1.set_title('3D Flight Path')
-            ax1.set_xlabel('Downrange X (m)')
-            ax1.set_ylabel('Crossrange Y (m)')
-            ax1.set_zlabel('Altitude Z (m)')
+        if panel.kind == "xy":
+            x_name, y_name = panel.channels
+            ax.plot(to_display(self.array(x_name)), to_display(self.array(y_name)), lw=2)
+            ax.set_xlabel(f"{panel.labels.get(x_name, x_name)} ({panel.unit})")
+            ax.set_ylabel(f"{panel.labels.get(y_name, y_name)} ({panel.unit})")
+            ax.axis('equal')
         else:
-            ax1 = fig.add_subplot(121)
-            ax1.plot(pos[:, 0], pos[:, 1], color='#2ca02c', lw=2)
-            ax1.set_title('2D Flight Path')
-            ax1.set_xlabel('Downrange X (m)')
-            ax1.set_ylabel('Altitude Y (m)')
-            ax1.axvline(0, color='black', linestyle='--', alpha=0.5)
-            ax1.axis('equal') 
-            
-        ax1.grid(True, linestyle=':', alpha=0.6)
+            for name in panel.channels:
+                t, v = self.series(name)
+                ax.plot(t, to_display(v), label=panel.labels.get(name, name), lw=2)
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel(panel.unit)
+            ax.axhline(0, color='black', linestyle='--', lw=1, alpha=0.5)
+            if len(panel.channels) > 1:
+                ax.legend(loc='upper right')
 
-        # --- Plot 2: Velocities over time ---
-        ax2 = fig.add_subplot(122)
-        ax2.plot(time, vel[:, 0], label='Vel X (Downrange)', color='#1f77b4', lw=2)
-        
-        if is_3d:
-            ax2.plot(time, vel[:, 1], label='Vel Y (Crossrange)', color='#d62728', lw=2)
-            ax2.plot(time, vel[:, 2], label='Vel Z (Vertical)', color='#ff7f0e', lw=2)
-        else:
-            ax2.plot(time, vel[:, 1], label='Vel Y (Vertical)', color='#ff7f0e', lw=2)
-            
-        ax2.set_title('Velocity Profiles')
-        ax2.set_xlabel('Time (Seconds)')
-        ax2.set_ylabel('Velocity (m/s)')
-        ax2.legend()
-        ax2.grid(True, linestyle=':', alpha=0.6)
-
-        plt.tight_layout()
-        plt.show()
+        for y in panel.hlines:
+            ax.axhline(y, color='gray', linestyle=':')
+        ax.set_title(panel.title, loc='left')
+        ax.grid(True, linestyle=':', alpha=0.6)

@@ -13,7 +13,7 @@ from src.plant.vehicle.rocket import Rocket
 from src.plant.vehicle.kinematics import Kinematics
 from src.plant.vehicle.aerodynamics import Aerodynamics
 from src.plant.sensors.imu import Imu, GRAVITY
-from src.plant.logger import FlightLogger
+from src.plant.logger import FlightLogger, Panel
 from src.plant.diffeqsolvers import rk4_step
 
 from src.controlling.controllers.mpc import ModelPredictiveControl
@@ -62,19 +62,22 @@ objective = MinimizeError(nbr_states=2)
 kf_model = IMU_KF_RocketTVC(dt, params.actuator, params.imu.gyro)   # [theta_dot, delta, wind]
 estimator = AttitudeEstimator(kf_model, dt, launch_angle=launch_angle)
 
-logger = FlightLogger(u_limit_deg=np.degrees(params.actuator.max_gimbal_rad))
+logger = FlightLogger()
 
 
 # ===== Pad phase: rocket clamped, motor off, true rate = 0 =====
-gyro_pad = [imu.measure(theta=launch_angle, theta_dot=0.0, ax=0.0, ay=0.0)["gyro"]
-            for _ in range(int(pad_seconds / dt))]
+n_pad = int(pad_seconds / dt)
+gyro_pad = []
+for i in range(n_pad):
+    g = imu.measure(theta=launch_angle, theta_dot=0.0, ax=0.0, ay=0.0)["gyro"]
+    gyro_pad.append(g)
+    logger.log((i - n_pad) * dt, gyro=g)   # negative time: before ignition
 estimator.calibrate_bias(gyro_pad)
 
 
 # ===== Flight =====
 x_current = x0.copy()
 u_opt = np.array([0.0])
-theta_true_hist, theta_est_hist = [], []
 
 for t in np.arange(0, t_end, dt):
     rocket.update_state(t)
@@ -86,7 +89,6 @@ for t in np.arange(0, t_end, dt):
     )
     kinematics.step(dt, thrust=rocket.thrust, mass=rocket.mass, pitch_angle=pitch,
                     fx_aero=aero["F_aero_x"], fy_aero=aero["F_aero_y"])
-    logger.log_step(t, x_current, u_opt, pos=kinematics.pos, vel=kinematics.vel)
 
     # True vehicle acceleration, fed to the IMU (Option 1 reads only the gyro,
     # but the accelerometer channel is driven honestly for future use / logging).
@@ -108,15 +110,26 @@ for t in np.arange(0, t_end, dt):
     u_opt = mpc.step(x_hat, ref, u_opt, current_Phi=Phi_full, current_Gamma=Gamma_full)
     estimator.predict(u_opt, Phi_red, Gamma_red)
 
-    theta_true_hist.append(x_current[0])
-    theta_est_hist.append(float(x_hat[0, 0]))
+    logger.log(t,
+        # plant truth (pre-propagation, i.e. the state the controller acted on)
+        theta_true=x_current[0], theta_dot_true=x_current[1], delta_true=x_current[2],
+        pos_x=kinematics.x, pos_y=kinematics.y, vx=kinematics.vx, vy=kinematics.vy,
+        alpha_aero=aero.get("alpha", 0.0),   # absent below the aero model's speed cutoff
+        # sensing & estimation
+        gyro=meas["gyro"], f_long=meas["f_long"], f_lat=meas["f_lat"],
+        theta_est=x_hat[0, 0], theta_dot_est=x_hat[1, 0],
+        delta_est=x_hat[2, 0], wind_est=x_hat[3, 0],
+        theta_err=x_hat[0, 0] - x_current[0],
+        # control
+        u_cmd=u_opt[0],
+    )
 
     x_current = rk4_step(rocket.dynamics, t, x_current, dt, u_opt, M_aero=aero["M_aero"])
 
 
 # ===== Verification =====
-theta_true = np.array(theta_true_hist)
-theta_est = np.array(theta_est_hist)
+theta_true = logger.array("theta_true")
+theta_est = logger.array("theta_est")
 print(f"gyro bias:   true {np.degrees(imu.gyro_bias):+.4f} deg/s   "
       f"calibrated {np.degrees(estimator.gyro_bias):+.4f} deg/s   "
       f"residual {np.degrees(imu.gyro_bias - estimator.gyro_bias):+.4f} deg/s")
@@ -124,4 +137,26 @@ print(f"theta est:   max |est - true| = {np.degrees(np.abs(theta_est - theta_tru
 print(f"stability:   final theta = {np.degrees(theta_true[-1]):+.4f} deg   "
       f"max |theta| = {np.degrees(np.abs(theta_true).max()):.4f} deg")
 
-logger.plot_dashboard()
+
+# ===== Dashboard =====
+gimbal_limit_deg = float(np.degrees(params.actuator.max_gimbal_rad))
+
+dashboard = [
+    Panel("Attitude", ["theta_true", "theta_est"], unit="deg",
+          labels={"theta_true": "true", "theta_est": "estimate"}),
+    Panel("Attitude estimation error", ["theta_err"], unit="deg"),
+    Panel("Pitch rate (pad calibration at t < 0)", ["gyro", "theta_dot_true", "theta_dot_est"],
+          unit="deg/s",
+          labels={"gyro": "gyro (raw)", "theta_dot_true": "true", "theta_dot_est": "estimate"}),
+    Panel("Gimbal", ["u_cmd", "delta_true", "delta_est"], unit="deg",
+          hlines=(gimbal_limit_deg, -gimbal_limit_deg),
+          labels={"u_cmd": "command", "delta_true": "true", "delta_est": "estimate"}),
+    Panel("Wind disturbance estimate (KF state)", ["wind_est"], unit="deg/s^2"),
+    Panel("Angle of attack", ["alpha_aero"], unit="deg"),
+    Panel("Velocity", ["vx", "vy"], unit="m/s",
+          labels={"vx": "downrange", "vy": "vertical"}),
+    Panel("Flight path", ["pos_x", "pos_y"], kind="xy", unit="m",
+          labels={"pos_x": "downrange", "pos_y": "altitude"}),
+]
+
+logger.plot(dashboard, title="Rocket TVC simulation — pitch axis")
