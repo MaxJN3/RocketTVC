@@ -6,7 +6,7 @@ from src.controlling.modelling.modelconfig import ModelConfig
 
 def add_disturbance_state(base_model: ModelConfig, Gammad=None, Cd=None, Cdz=None, var_dist=1e-1):
     """
-    Augments a state-space model with a constant disturbance state.
+    Extend state space model with a constant disturbance state.
     Defaults to assuming the disturbance is an external acceleration (like wind).
     """
     Phi = base_model.Phi
@@ -70,9 +70,7 @@ def add_disturbance_state(base_model: ModelConfig, Gammad=None, Cd=None, Cdz=Non
 
 def extend_matrices_with_disturbance(Phi, Gamma, Gammad):
     """
-    Runtime companion to add_disturbance_state: applies the same block
-    structure to time-varying Phi, Gamma. The disturbance is modeled as
-    constant over each step (random-walk state).
+    Used to extend time varying state space dynamic matrices while running live
     """
     nbr_x = Phi.shape[0]
     nbr_d = Gammad.shape[1]

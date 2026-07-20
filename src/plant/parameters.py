@@ -4,16 +4,13 @@ from dataclasses import dataclass, field
 
 @dataclass
 class MotorParams:
-    """Motor properties. Swap these for real data (e.g. thrustcurve.org) once a motor is chosen."""
+    """Motor properties. PLACEHOLDERS"""
     burn_time: float = 5.0          # s
     average_thrust: float = 15.0    # N
     propellant_mass: float = 0.15   # kg
 
     def thrust(self, t):
-        """Thrust in Newtons at time t since ignition.
-
-        Constant profile for now; replace with an interpolated thrust curve
-        when real motor data is available.
+        """Thrust in Newtons at time t since ignition. Constant forn now
         """
         return self.average_thrust if t < self.burn_time else 0.0
 
@@ -34,33 +31,33 @@ class AirframeParams:
 
 @dataclass
 class ActuatorParams:
-    """TVC gimbal servo. omega_c is a guess until measured on the real servo."""
-    omega_c: float = 20.0                        # rad/s, first-order servo bandwidth
-    max_gimbal_rad: float = np.deg2rad(5.0)      # rad, mechanical gimbal limit
-    max_gimbal_step: float = 0.05                # rad, max command change per control step
+    """TVC gimbal servo. PLACEHOLDER omega_c ."""
+    omega_c: float = 20.0                        # rad/s, first order servo bandwidth
+    max_gimbal_rad: float = np.deg2rad(5.0)      # rad
+    max_gimbal_step: float = 0.05                # rad
 
 
 @dataclass
 class AeroParams:
-    cd: float = 0.5             # drag coefficient (generic tube)
-    cna: float = 2.0            # normal force coefficient derivative, per rad (finless tube)
+    cd: float = 0.5             # drag coefficient (tube)
+    cna: float = 2.0            # normal force coefficient derivative, per rad
     air_density: float = 1.225  # kg/m^3 at sea level
 
 
 @dataclass
 class GyroParams:
-    """Placeholder numbers from the MPU-6050 datasheet — replace with the real IMU's."""
+    """Placeholder numbers"""
     noise_density: float = np.deg2rad(0.005)   # (rad/s)/sqrt(Hz)
-    turn_on_bias_max: float = np.deg2rad(1.0)  # rad/s, drawn uniformly at power-on
-    sample_rate: float = 50.0                  # Hz, matches the control rate for v1
+    turn_on_bias_max: float = np.deg2rad(1.0)  # rad/s
+    sample_rate: float = 50.0                  # Hz
 
 
 @dataclass
 class AccelParams:
-    """Placeholder numbers from the MPU-6050 datasheet — replace with the real IMU's."""
-    noise_density: float = 400e-6 * 9.81       # (m/s^2)/sqrt(Hz)  (400 ug/sqrt(Hz))
-    turn_on_bias_max: float = 0.05 * 9.81      # m/s^2  (~50 mg)
-    sample_rate: float = 50.0                  # Hz, matches the control rate for v1
+    """Placeholder numbers"""
+    noise_density: float = 400e-6 * 9.81       # (m/s^2)/sqrt(Hz)
+    turn_on_bias_max: float = 0.05 * 9.81      # m/s^2
+    sample_rate: float = 50.0                  # Hz
 
 
 @dataclass

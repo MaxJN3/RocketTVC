@@ -1,11 +1,4 @@
 def rk4_step(f, t, x, dt, *args, **kwargs):
-    """
-    One step of 4th-order Runge-Kutta (3/8 rule): f(t, x, *args, **kwargs) -> dx/dt.
-
-    Any extra positional/keyword arguments are passed through to f unchanged —
-    they are inputs held constant over the step (zero-order hold), e.g. the
-    control input, aero moment, thrust, or mass.
-    """
     k1 = f(t, x, *args, **kwargs)
     k2 = f(t + dt/3.0, x + (dt/3.0)*k1, *args, **kwargs)
     k3 = f(t + 2.0*dt/3.0, x - (dt/3.0)*k1 + dt*k2, *args, **kwargs)

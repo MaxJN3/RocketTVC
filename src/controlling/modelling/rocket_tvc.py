@@ -1,20 +1,9 @@
-"""
-Rocket TVC pitch-axis models.
-
-Each model builder is kept next to its runtime linearizer: they encode the
-same state-space structure, and must change together. The builders produce
-the nominal ModelConfig (used once, e.g. to compute the steady-state KF gain);
-the linearizers rebuild Phi/Gamma each control step as thrust and mass change
-during the burn.
-"""
 import numpy as np
 
 from src.plant.parameters import ActuatorParams, GyroParams
 from src.plant.sensors.imu import noise_std
 from src.controlling.modelling.modelconfig import ModelConfig
 
-
-# ===== MPC model: [theta, theta_dot, delta] (+ wind via add_disturbance_state) =====
 
 def ActuatorDelay_RocketTVC(dt, actuator: ActuatorParams):
     unit = "rad"
@@ -70,7 +59,7 @@ def linearize_actuator_delay(dt, actuator: ActuatorParams, thrust, gimbal_arm, i
     """
     Time-varying Phi, Gamma for the ActuatorDelay_RocketTVC structure,
     linearized about the current operating point (thrust and mass properties
-    change during the burn, so this must be recomputed every control step).
+    change during the burn, recompute every step).
     """
     alpha = (-thrust * gimbal_arm) / inertia
 
@@ -98,18 +87,8 @@ def IMU_KF_RocketTVC(dt, actuator: ActuatorParams, gyro: GyroParams,
                      var_model=1e-2, var_wind=1e-1, thrust_nom=15.0,
                      gimbal_arm_nom=0.5, inertia_nom=(1/12)*0.925):
     """
-    Reduced observable model for the rate-gyro attitude KF: state [theta_dot, delta, wind].
-
-    theta is deliberately NOT in this model — with a rate-only measurement it is
-    unobservable (the DARE has no finite solution), and it is fully decoupled from
-    the dynamics, so the AttitudeEstimator dead-reckons it separately. What remains
-    here is observable (rank 3/3) and the steady-state DARE solves cleanly.
-
-    The measurement is the bias-corrected gyro, treated as a direct reading of
-    theta_dot; R2 is the gyro's own noise variance, so nothing is faked. Phi is
-    time-varying (alpha depends on thrust/mass); nominal values here are only used
-    to compute the steady-state gain, then Phi is replaced each step at runtime.
-    """
+    Reduced observable model for the rate-gyro attitude KF state [theta_dot, delta, wind]"""
+    
     Phi, Gamma = linearize_imu_kf(dt, actuator, thrust_nom, gimbal_arm_nom, inertia_nom)
 
     # process noise: angular-accel uncertainty on theta_dot, plus a wind random walk

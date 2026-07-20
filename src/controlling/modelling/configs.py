@@ -23,7 +23,7 @@ def SIM_RocketTVC(actuator: ActuatorParams):
     Hp = 20
     Hu = 20
 
-    Q1 = np.diag([1000.0, 10.0])
+    Q1 = np.diag([100.0, 1.0])
 
     Q2 = np.diag([10.0])
 

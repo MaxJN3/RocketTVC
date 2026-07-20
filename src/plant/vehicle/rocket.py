@@ -4,7 +4,7 @@ from src.plant.parameters import VehicleParams
 
 
 class Rocket():
-    """Physical truth model of the vehicle: mass properties, thrust, and rotational dynamics."""
+    """Physical model: mass properties, thrust, and rotational dynamics."""
 
     def __init__(self, params: VehicleParams):
         self.params = params
@@ -18,24 +18,16 @@ class Rocket():
 
     @property
     def gimbal_arm(self):
-        """Distance from the CG to the motor gimbal at the tail.
-
-        Equals cg only while the CG sits at the geometric center — do not
-        substitute one for the other once CG shift during burn is modeled.
-        """
+        """Distance from the CG to the motor gimbal at the tail"""
         return self.length - self.cg
 
     def update_state(self, t):
-        '''
-        Thrust in Newtons. 0 if the motor has burned out.
-        Mass drops linearly as solid fuel burns.
-        Moment of inertia for a long thin cylinder: I = (1/12) * m * L^2
-        '''
+        '''Thrust in Newtons. 0 if the motor has burned out'''
         self.thrust = self.params.motor.thrust(t)
         self.mass = self.dry_mass + self.params.motor.propellant_remaining(t)
         self.inertia = (1.0 / 12.0) * self.mass * (self.length ** 2)
 
-        # Constant for now; propellant burn-off will shift this on the real vehicle.
+        # Constant for now
         self.cg = self.length / 2
 
     def dynamics(self, t, x, u, M_aero):

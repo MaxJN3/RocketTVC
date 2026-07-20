@@ -1,8 +1,3 @@
-"""
-Generic flight logger: stores named scalar channels, renders a declarative
-panel layout. The logger knows nothing about rockets — the simulation (or
-future hardware telemetry reader) declares what to log and how to plot it.
-"""
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -20,12 +15,7 @@ class Panel:
     One subplot in the dashboard.
 
     kind="time": each channel is drawn against its own logged time base.
-    kind="xy":   exactly two channels [x, y] (e.g. downrange vs altitude),
-                 drawn against each other with equal aspect.
-
-    unit is the y-axis label; the units in _RAD_TO_DEG_UNITS additionally
-    convert the stored radian data to degrees for display. hlines are drawn
-    in display units.
+    kind="xy":   exactly two channels [x, y]
     """
     title: str
     channels: list
@@ -41,11 +31,7 @@ class FlightLogger:
         self._values = defaultdict(list)
 
     def log(self, t, **channels):
-        """Log any number of named scalar signals at time t.
-
-        Each channel keeps its own time base, so channels logged at different
-        rates (pad phase, fast IMU, slow control loop) coexist naturally.
-        """
+        """Log any number of named scalar signals at time t"""
         for name, value in channels.items():
             self._times[name].append(t)
             self._values[name].append(float(value))

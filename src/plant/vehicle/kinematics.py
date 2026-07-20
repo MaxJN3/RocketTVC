@@ -4,9 +4,7 @@ from src.plant.diffeqsolvers import rk4_step
 class Kinematics:
     def __init__(self, is_3d=False):
         """
-        A general kinematic tracking system.
-        If is_3d=False: Tracks 2D Space (X = Downrange, Y = Altitude)
-        If is_3d=True:  Tracks 3D Space (X = Downrange, Y = Crossrange, Z = Altitude)
+        A general kinematic tracking system
         """
         self.is_3d = is_3d
         

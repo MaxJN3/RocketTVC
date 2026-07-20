@@ -70,5 +70,5 @@ class Aerodynamics:
             "F_aero_x": F_aero_x,
             "F_aero_y": F_aero_y,
             "M_aero": M_aero,
-            "alpha": alpha # Useful for logging
+            "alpha": alpha
         }
