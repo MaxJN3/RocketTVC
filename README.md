@@ -21,7 +21,7 @@ The simulation models a 2D rocket pitch-axis system driven by a single gimbaled 
 * `src/controlling/modelling/` - State-space linearizations and transformation pipelines.
 * `src/plant/` - Physical vehicle models, aerodynamic calculations, IMU sensor noise models, and RK4 numerical solvers.
 
-## Roadmap & Known Issues
+## Roadmap
 * **Add Dimension:** Simulate in 3D.
 * **Tune Controller:** Tune the MPC and Kalman parameters.
 * **C++ Porting:** Port matrix solvers and MPC optimization routines to C++ for microcontroller execution.

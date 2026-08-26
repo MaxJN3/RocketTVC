@@ -71,7 +71,7 @@ gyro_pad = []
 for i in range(n_pad):
     g = imu.measure(theta=launch_angle, theta_dot=0.0, ax=0.0, ay=0.0)["gyro"]
     gyro_pad.append(g)
-    logger.log((i - n_pad) * dt, gyro=g)   # negative time: before ignition
+    logger.log((i - n_pad) * dt, gyro=g)   # negative time before ignition
 estimator.calibrate_bias(gyro_pad)
 
 
