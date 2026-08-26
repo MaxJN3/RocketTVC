@@ -41,8 +41,8 @@ x0 = np.array([0.1, 0.0, 0.0])       # true [theta, theta_dot, delta]: launch ti
 launch_angle = x0[0]                 # known from the launch rail
 
 def wind(t):
-    """Wind velocity (x, y) in m/s: a 10 m/s crosswind gust hitting at t = 2s."""
-    return (-10.0, 0.0) if t >= 2.0 else (0.0, 0.0)
+    """Wind velocity (x, y) in m/s: a 3 m/s crosswind gust hitting at t = 2s."""
+    return (-3.0, 0.0) if t >= 2.0 else (0.0, 0.0)
 
 
 # ===== Plant (physical truth) =====
@@ -111,11 +111,11 @@ for t in np.arange(0, t_end, dt):
     estimator.predict(u_opt, Phi_red, Gamma_red)
 
     logger.log(t,
-        # plant truth (pre-propagation, i.e. the state the controller acted on)
+        # plant truth (pre-propagation, the state the controller acted on)
         theta_true=x_current[0], theta_dot_true=x_current[1], delta_true=x_current[2],
         pos_x=kinematics.x, pos_y=kinematics.y, vx=kinematics.vx, vy=kinematics.vy,
-        alpha_aero=aero.get("alpha", 0.0),   # absent below the aero model's speed cutoff
-        # sensing & estimation
+        alpha_aero=aero.get("alpha", 0.0),   # absent below the aero model speed cutoff
+        # sensing and estimation
         gyro=meas["gyro"], f_long=meas["f_long"], f_lat=meas["f_lat"],
         theta_est=x_hat[0, 0], theta_dot_est=x_hat[1, 0],
         delta_est=x_hat[2, 0], wind_est=x_hat[3, 0],
