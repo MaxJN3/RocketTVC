@@ -1,8 +1,8 @@
 # Rocket Thrust Vector Control (TVC) Simulation
 
-A Python simulation framework for rocket pitch attitude control using Model Predictive Control (MPC) and state estimation under dynamic mass depletion and aerodynamic wind disturbances.
+Simulation framework for rocket pitch attitude control using Model Predictive Control (MPC) and Kalman state estimation under mass depletion and wind disturbances.
 
-The goal of this project is to port the MPC and Kalman control to a microcontroller in C++ to control the pitch of a 3D printed rocket in real-time.
+The goal of this project is to port the MPC and Kalman controller to a microcontroller in C++ to control the pitch of a 3D printed rocket in real-time.
 
 ## System Architecture
 
